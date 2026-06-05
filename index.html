@@ -627,6 +627,54 @@
 
   <!-- CORE CLIENT DATA CONFIG ENGINE AND INTRINSIC JS SERVICES -->
   <script>
+    // Safety fallback for localStorage if sandbox block policies are active
+    const safeLocalStorage = {
+      _memoryStore: {},
+      _isLocalStorageAvailable: (function() {
+        try {
+          const testKey = '__storage_test__';
+          localStorage.setItem(testKey, testKey);
+          localStorage.removeItem(testKey);
+          return true;
+        } catch (e) {
+          console.warn("[STORAGE] Native localStorage is inaccessible inside the sandbox environment. Falling back to secure memory storage.", e);
+          return false;
+        }
+      })(),
+      getItem(key) {
+        if (this._isLocalStorageAvailable) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            console.warn("[STORAGE] localStorage.getItem failed:", e);
+          }
+        }
+        return Object.prototype.hasOwnProperty.call(this._memoryStore, key) ? this._memoryStore[key] : null;
+      },
+      setItem(key, value) {
+        if (this._isLocalStorageAvailable) {
+          try {
+            localStorage.setItem(key, value);
+            return;
+          } catch (e) {
+            console.warn("[STORAGE] localStorage.setItem failed:", e);
+          }
+        }
+        this._memoryStore[key] = String(value);
+      },
+      removeItem(key) {
+        if (this._isLocalStorageAvailable) {
+          try {
+            localStorage.removeItem(key);
+            return;
+          } catch (e) {
+            console.warn("[STORAGE] localStorage.removeItem failed:", e);
+          }
+        }
+        delete this._memoryStore[key];
+      }
+    };
+
     // 100% SINGLE POINT CONFIG FOR EASY UPDATES OR MERCHANDISING
     const CONFIG = {
       shopName: "Aggarwal Wholesale Store",
@@ -1017,7 +1065,7 @@
 
     // B2B SAVED ORDERS UTILITIES
     function getSavedOrders() {
-      const stored = localStorage.getItem('ab_b2b_orders');
+      const stored = safeLocalStorage.getItem('ab_b2b_orders');
       if (!stored) {
         const initialOrders = [
           {
@@ -1037,7 +1085,7 @@
             itemsText: "Bingo! Mad Angles Achari Masti (x5), Uncle Chips Spicy Treat (x5), Maggi Masala Noodles (x2)"
           }
         ];
-        localStorage.setItem('ab_b2b_orders', JSON.stringify(initialOrders));
+        safeLocalStorage.setItem('ab_b2b_orders', JSON.stringify(initialOrders));
         return initialOrders;
       }
       return JSON.parse(stored);
@@ -1057,7 +1105,7 @@
       };
       
       orders.unshift(newOrder);
-      localStorage.setItem('ab_b2b_orders', JSON.stringify(orders));
+      safeLocalStorage.setItem('ab_b2b_orders', JSON.stringify(orders));
     }
 
     function repeatOrder(invoiceId) {
@@ -1329,7 +1377,37 @@
 
     // DOM CONTENT INQUISITOR PORTALS
     function initializeApp() {
-      console.log("[DEBUG] Initializing Aggarwal Wholesale Store App. ReadyState:", document.readyState);
+      console.log("[DEBUG] Initializing Aggarwal Wholesale Store App.");
+      console.log("[DEBUG] document.readyState:", document.readyState);
+      console.log("[DEBUG] Product catalog array length:", CONFIG && CONFIG.products ? CONFIG.products.length : "undefined");
+      console.log("[DEBUG] Category catalog array length:", CONFIG && CONFIG.categories ? CONFIG.categories.length : "undefined");
+      
+      // Setup global uncaught error listener to trace any sandbox failures immediately
+      window.addEventListener('error', (event) => {
+        console.error("[GLOBAL UNCATCHED RUNTIME ERROR]", event.error || event.message);
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error("[GLOBAL UNHANDLED PROMISE REJECTION]", event.reason);
+      });
+
+      // Instrumentation of global fetch call
+      try {
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+          console.log("[DEBUG FETCH REQUEST] URL:", args[0], "Options:", args[1] || {});
+          try {
+            const res = await originalFetch.apply(this, args);
+            console.log("[DEBUG FETCH RESPONSE] URL:", args[0], "Status:", res.status);
+            return res;
+          } catch (err) {
+            console.error("[DEBUG FETCH ERROR] URL:", args[0], "Error:", err);
+            throw err;
+          }
+        };
+        console.log("[DEBUG] Global Fetch calls instrumented successfully.");
+      } catch (e) {
+        console.warn("[DEBUG] Failed to instrument Fetch:", e);
+      }
       
       const safeInit = (name, fn) => {
         try {
@@ -1400,7 +1478,7 @@
 
     // BASKET DATA PERSISTENCE SERVICES
     function initializeCartData() {
-      const savedItems = localStorage.getItem('wholesale_basket');
+      const savedItems = safeLocalStorage.getItem('wholesale_basket');
       if (savedItems) {
         try {
           cart = JSON.parse(savedItems);
@@ -1413,7 +1491,7 @@
     }
 
     function saveCartState() {
-      localStorage.setItem('wholesale_basket', JSON.stringify(cart));
+      safeLocalStorage.setItem('wholesale_basket', JSON.stringify(cart));
     }
 
     // RENDERS LARGE PREMIUM PROMOTION CARDS DYNAMICALLY
@@ -1444,6 +1522,7 @@
 
     // DYNAMIC RE-INDEX AND DISPLAY FOR CAROUSEL LABELS AS CIRCLE IMAGES WITH BOTTOM TITLES
     function renderCarouselCategories() {
+      console.log("[DEBUG] Executing renderCarouselCategories. Categories config:", CONFIG.categories, "Total products:", CONFIG.products.length);
       const container = document.getElementById('categories-carousel');
       container.innerHTML = "";
 
@@ -1664,6 +1743,7 @@
 
     // MAIN PRODUCT RENDERS CATALOG SYSTEM WITH ADD-TO-CART INCREMENTORS
     function renderCatalogGrid() {
+      console.log("[DEBUG] Executing renderCatalogGrid. Current Category:", currentCategory, "Lookup Keywords:", lookupKeywords, "Total products:", CONFIG.products.length);
       const grid = document.getElementById('products-catalog-grid');
       const fallback = document.getElementById('no-item-fallback');
       grid.innerHTML = "";
@@ -4302,7 +4382,7 @@
     function executeClearCartEntirely() {
       dismissClearCartConfirmation();
       cart = [];
-      localStorage.removeItem('wholesale_basket');
+      safeLocalStorage.removeItem('wholesale_basket');
       saveCartState();
       refreshCartSystemCounters();
       renderCatalogGrid();
