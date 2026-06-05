@@ -1328,14 +1328,26 @@
     }
 
     // DOM CONTENT INQUISITOR PORTALS
-    window.addEventListener('DOMContentLoaded', () => {
-      bootstrapIdentityUI();
-      initializeCartData();
-      renderOfferBannersUI();
-      renderCarouselCategories();
-      renderCatalogGrid();
-      refreshCartSystemCounters();
-      adjustFloatingButtons();
+    function initializeApp() {
+      console.log("[DEBUG] Initializing Aggarwal Wholesale Store App. ReadyState:", document.readyState);
+      
+      const safeInit = (name, fn) => {
+        try {
+          fn();
+          console.log(`[DEBUG] Initialized successfully: ${name}`);
+        } catch (e) {
+          console.error(`[ERROR] Failed to initialize component ${name}:`, e);
+        }
+      };
+
+      safeInit("bootstrapIdentityUI", bootstrapIdentityUI);
+      safeInit("initializeCartData", initializeCartData);
+      safeInit("renderOfferBannersUI", renderOfferBannersUI);
+      safeInit("renderCarouselCategories", renderCarouselCategories);
+      safeInit("renderCatalogGrid", renderCatalogGrid);
+      safeInit("refreshCartSystemCounters", refreshCartSystemCounters);
+      safeInit("adjustFloatingButtons", adjustFloatingButtons);
+      
       window.addEventListener('resize', adjustFloatingButtons);
 
       // Initialize browser history entry for the initial page view
@@ -1352,7 +1364,13 @@
           switchAppView('home', false);
         }
       });
-    });
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+      initializeApp();
+    }
 
     // BIND CONFIG AND BRAND IDENTITY VALUES TO HEADER/FOOTER
     function bootstrapIdentityUI() {
