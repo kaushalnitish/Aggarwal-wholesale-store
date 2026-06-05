@@ -76,6 +76,7 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans min-h-screen flex flex-col antialiased">
+  <div id="root" class="hidden" style="display: none;"></div>
 
   <!-- TOP PROMO SCROLLING BAR -->
   <div id="top-promo-banner" class="bg-[#11441c] text-wholesale-yellow text-[13px] py-2 px-4 text-center font-normal italic tracking-wider uppercase transition-colors relative z-50">
@@ -1054,6 +1055,12 @@
         }
       ]
     };
+    
+    // Global references for diagnostics and user-requested outputs
+    const PRODUCTS = CONFIG.products;
+    const CATEGORIES = CONFIG.categories;
+    window.PRODUCTS = PRODUCTS;
+    window.CATEGORIES = CATEGORIES;
 
     // ACTIVE CLIENT STATES OF APP
     let cart = [];
@@ -1382,12 +1389,52 @@
       console.log("[DEBUG] Product catalog array length:", CONFIG && CONFIG.products ? CONFIG.products.length : "undefined");
       console.log("[DEBUG] Category catalog array length:", CONFIG && CONFIG.categories ? CONFIG.categories.length : "undefined");
       
+      // Live diagnostics error handler
+      window.lastAppError = null;
+      window.updateDbgError = function(err) {
+        window.lastAppError = err;
+        const errNode = document.getElementById('dbg-last-error');
+        if (errNode) {
+          errNode.innerText = err ? (err.stack || err.message || String(err)) : 'None';
+          errNode.classList.remove('text-red-400', 'text-gray-400');
+          errNode.classList.add('text-red-500', 'font-bold');
+        }
+      };
+
+      window.updateDbgPane = function(stepName) {
+        try {
+          const dbgInit = document.getElementById('dbg-init');
+          if (dbgInit) {
+            dbgInit.innerText = "Yes (" + stepName + ")";
+            dbgInit.classList.remove('text-red-500');
+            dbgInit.classList.add('text-green-500');
+            
+            const dbgPr = document.getElementById('dbg-products-count');
+            if (dbgPr) dbgPr.innerText = CONFIG && CONFIG.products ? CONFIG.products.length : 'unloaded';
+            
+            const dbgCat = document.getElementById('dbg-categories-count');
+            if (dbgCat) dbgCat.innerText = CONFIG && CONFIG.categories ? CONFIG.categories.length : 'unloaded';
+            
+            const dbgView = document.getElementById('dbg-current-view');
+            if (dbgView) dbgView.innerText = currentAppView || 'home';
+            
+            const dbgRs = document.getElementById('dbg-readystate');
+            if (dbgRs) dbgRs.innerText = document.readyState;
+          }
+        } catch(e) {
+          console.error("Debug pane updater encountered an issue", e);
+        }
+      };
+
       // Setup global uncaught error listener to trace any sandbox failures immediately
       window.addEventListener('error', (event) => {
-        console.error("[GLOBAL UNCATCHED RUNTIME ERROR]", event.error || event.message);
+        const errorMsg = event.error || event.message;
+        console.error("[GLOBAL UNCATCHED RUNTIME ERROR]", errorMsg);
+        window.updateDbgError(event.error || new Error(event.message));
       });
       window.addEventListener('unhandledrejection', (event) => {
         console.error("[GLOBAL UNHANDLED PROMISE REJECTION]", event.reason);
+        window.updateDbgError(event.reason || new Error("Unhandled Promise Rejection"));
       });
 
       // Instrumentation of global fetch call
@@ -1401,6 +1448,7 @@
             return res;
           } catch (err) {
             console.error("[DEBUG FETCH ERROR] URL:", args[0], "Error:", err);
+            window.updateDbgError(err);
             throw err;
           }
         };
@@ -1413,8 +1461,10 @@
         try {
           fn();
           console.log(`[DEBUG] Initialized successfully: ${name}`);
+          window.updateDbgPane(name);
         } catch (e) {
           console.error(`[ERROR] Failed to initialize component ${name}:`, e);
+          window.updateDbgError(e);
         }
       };
 
@@ -1522,8 +1572,15 @@
 
     // DYNAMIC RE-INDEX AND DISPLAY FOR CAROUSEL LABELS AS CIRCLE IMAGES WITH BOTTOM TITLES
     function renderCarouselCategories() {
+      console.log("Categories:", CATEGORIES);
+      console.log("Categories Length:", CATEGORIES?.length);
       console.log("[DEBUG] Executing renderCarouselCategories. Categories config:", CONFIG.categories, "Total products:", CONFIG.products.length);
+      
       const container = document.getElementById('categories-carousel');
+      if (document.getElementById('dbg-carousel-render')) {
+        document.getElementById('dbg-carousel-render').innerText = `Done (${CONFIG.categories.length + 1})`;
+        document.getElementById('dbg-carousel-render').className = "text-green-500 font-bold";
+      }
       container.innerHTML = "";
 
       const distinctCategories = ["All", ...CONFIG.categories];
@@ -1743,12 +1800,19 @@
 
     // MAIN PRODUCT RENDERS CATALOG SYSTEM WITH ADD-TO-CART INCREMENTORS
     function renderCatalogGrid() {
+      console.log("Products:", PRODUCTS);
+      console.log("Products Length:", PRODUCTS?.length);
       console.log("[DEBUG] Executing renderCatalogGrid. Current Category:", currentCategory, "Lookup Keywords:", lookupKeywords, "Total products:", CONFIG.products.length);
+      
       const grid = document.getElementById('products-catalog-grid');
       const fallback = document.getElementById('no-item-fallback');
-      grid.innerHTML = "";
-
+      
       let items = CONFIG.products;
+      if (document.getElementById('dbg-grid-render')) {
+        document.getElementById('dbg-grid-render').innerText = `Done (${items.length} items)`;
+        document.getElementById('dbg-grid-render').className = "text-green-500 font-bold";
+      }
+      grid.innerHTML = "";
 
       // Filter state logic
       if (currentCategory !== "All") {
@@ -4568,6 +4632,120 @@
         container.classList.add('hidden');
       }, 300);
     }
+
+    // FLOATING DIAGNOSTICS PANEL COMPONENT AND AUTOMATION HELPERS
+    window.runDiagnosticTest = function() {
+      console.log("[DIAGNOSTICS] Starting live diagnostics validation test...");
+      const results = [];
+      const grid = document.getElementById('products-catalog-grid');
+      const carousel = document.getElementById('categories-carousel');
+      const main = document.querySelector('main');
+      const state = document.readyState;
+      
+      results.push(`1. Document ReadyState: ${state}`);
+      results.push(`2. PRODUCTS Array Count: ${window.PRODUCTS ? window.PRODUCTS.length : 'unloaded (undefined)'}`);
+      results.push(`3. CATEGORIES Array Count: ${window.CATEGORIES ? window.CATEGORIES.length : 'unloaded (undefined)'}`);
+      
+      if (grid) {
+        results.push(`4. Products Grid element: Found (#products-catalog-grid) with ${grid.children.length} sub-sections/cards.`);
+        results.push(`5. Grid current style.display: "${grid.style.display || 'default'}"`);
+        if (grid.children.length === 0) {
+          results.push(`⚠️ WARNING: Grid children is 0! The HTML is generated but elements may be empty or hidden.`);
+        }
+      } else {
+        results.push(`❌ ERROR: Grid container (#products-catalog-grid) is completely missing from DOM!`);
+      }
+      
+      if (carousel) {
+        results.push(`6. Categories Carousel element: Found (#categories-carousel) with ${carousel.children.length} items.`);
+      } else {
+        results.push(`❌ ERROR: Categories carousel (#categories-carousel) is completely missing from DOM!`);
+      }
+      
+      if (main) {
+        results.push(`7. Main shell element classes: "${main.className || 'none'}"`);
+      } else {
+        results.push(`❌ ERROR: Main shell element tag is completely missing from DOM!`);
+      }
+      
+      alert(results.join('\n'));
+    };
+
+    window.forceReRenderUI = function() {
+      try {
+        console.log("[DIAGNOSTICS] Triggering forced manual layout re-render...");
+        bootstrapIdentityUI();
+        initializeCartData();
+        renderOfferBannersUI();
+        renderCarouselCategories();
+        renderCatalogGrid();
+        refreshCartSystemCounters();
+        adjustFloatingButtons();
+        alert("✅ Success: All layout components forced to re-render in sequence!");
+      } catch (e) {
+        console.error("[DIAGNOSTICS] Forced re-render failed:", e);
+        window.updateDbgError(e);
+        alert("❌ Error: Forced layout re-render failed: " + e.message);
+      }
+    };
+
+    // Auto-inject Diagnostics Panel HTML markup directly upon script execution
+    document.addEventListener("DOMContentLoaded", () => {
+      try {
+        const debugMarkup = `
+          <!-- FLOATING DIAGNOSTICS PANEL -->
+          <div id="floating-debug-pane" class="fixed bottom-4 right-4 z-[9999] bg-neutral-900 border border-neutral-700/60 rounded-2xl shadow-xl p-4 w-72 text-white font-mono text-[11px] flex flex-col gap-2 font-semibold">
+            <div class="flex items-center justify-between border-b border-neutral-700/60 pb-2 mb-1">
+              <span class="text-xs font-black tracking-widest text-[#f58220]">SYSTEM DIAGNOSTICS</span>
+              <button onclick="document.getElementById('floating-debug-pane').classList.toggle('opacity-30')" class="text-neutral-400 hover:text-white px-2 py-0.5 bg-neutral-800 rounded transition-all cursor-pointer">Dim</button>
+            </div>
+            <div class="flex justify-between">
+              <span>App Initialized:</span>
+              <span id="dbg-init" class="text-red-500 font-black">No</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Products Loaded:</span>
+              <span id="dbg-products-count" class="text-neutral-400">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Categories Loaded:</span>
+              <span id="dbg-categories-count" class="text-neutral-400">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Current View:</span>
+              <span id="dbg-current-view" class="text-blue-400">None</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Document ReadyState:</span>
+              <span id="dbg-readystate" class="text-pink-400">unknown</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Catalog Render:</span>
+              <span id="dbg-grid-render" class="text-neutral-400">never</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Carousel Render:</span>
+              <span id="dbg-carousel-render" class="text-neutral-400">never</span>
+            </div>
+            <div class="flex flex-col gap-1 border-t border-neutral-700/60 pt-2 mt-1">
+              <span class="text-[9px] text-red-500 tracking-wider font-extrabold uppercase">Last Runtime Error:</span>
+              <div id="dbg-last-error" class="bg-neutral-950/80 p-2 rounded border border-red-500/20 text-red-400 min-h-[30px] break-words text-[9px] max-h-24 overflow-y-auto">None</div>
+            </div>
+            <div class="flex gap-2 mt-1">
+              <button onclick="runDiagnosticTest()" class="flex-1 bg-neutral-850 hover:bg-neutral-800 text-white font-extrabold py-2 px-2 rounded-xl text-[10px] transition-all cursor-pointer shadow-sm text-center leading-none">Diagnostic Test</button>
+              <button onclick="forceReRenderUI()" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 px-2 rounded-xl text-[10px] transition-all cursor-pointer shadow-sm text-center leading-none">Force Render</button>
+            </div>
+          </div>
+        `;
+        const divNode = document.createElement("div");
+        divNode.innerHTML = debugMarkup;
+        document.body.appendChild(divNode.firstElementChild);
+        console.log("[DIAGNOSTICS] Debug diagnostics panel HTML markup injected successfully.");
+        if (window.updateDbgPane) window.updateDbgPane("debugInjected");
+      } catch (e) {
+        console.error("[DIAGNOSTICS] Failed to inject diagnostics panel:", e);
+      }
+    });
   </script>
 
 </body>
