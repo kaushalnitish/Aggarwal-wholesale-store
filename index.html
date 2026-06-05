@@ -76,7 +76,10 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans min-h-screen flex flex-col antialiased">
-  <div id="root" class="hidden" style="display: none;"></div>
+  <!-- TEMPORARY RED DIAGNOSTIC BANNER -->
+  <div id="temp-diagnostic-banner" class="bg-red-600 text-white font-black text-center py-3 px-4 text-sm z-[9999] tracking-wider uppercase" style="background-color: #dc2626 !important; color: white !important; font-weight: 900 !important; text-align: center !important; padding: 12px 16px !important; z-index: 99999 !important; display: block !important;">
+    APP STARTED
+  </div>
 
   <!-- TOP PROMO SCROLLING BAR -->
   <div id="top-promo-banner" class="bg-[#11441c] text-wholesale-yellow text-[13px] py-2 px-4 text-center font-normal italic tracking-wider uppercase transition-colors relative z-50">
@@ -1465,6 +1468,9 @@
         } catch (e) {
           console.error(`[ERROR] Failed to initialize component ${name}:`, e);
           window.updateDbgError(e);
+          const banner = document.getElementById('temp-diagnostic-banner');
+          if (banner) banner.innerText = "ERROR: [" + (e.message || String(e)) + "]";
+          alert("ERROR IN " + name + ": " + (e.message || String(e)));
         }
       };
 
@@ -1492,6 +1498,55 @@
           switchAppView('home', false);
         }
       });
+
+      // RUN RUNTIME DIAGNOSTICS FOR PARENT CONTAINER VISIBILITY
+      setTimeout(() => {
+        try {
+          const grid = document.getElementById('products-catalog-grid');
+          const carousel = document.getElementById('categories-carousel');
+          if (!grid || !carousel) {
+            alert("DIAGNOSTICS ERROR: grid or carousel not found in DOM");
+            return;
+          }
+
+          let results = [];
+          results.push("=== DIAGNOSTIC REPORT ===");
+
+          function inspectNode(el, name) {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            const childrenCount = el.children.length;
+            results.push(`${name} => tag:${el.tagName}, ID:#${el.id || '(none)'}, class:"${el.className}"`);
+            results.push(`  dims: offsetW=${el.offsetWidth}, offsetH=${el.offsetHeight}, scrollW=${el.scrollWidth}, scrollH=${el.scrollHeight}`);
+            results.push(`  rect: t=${rect.top}, l=${rect.left}, w=${rect.width}, h=${rect.height}`);
+            results.push(`  style: disp=${style.display}, vis=${style.visibility}, op=${style.opacity}, pos=${style.position}, ov=${style.overflow}, h=${style.height}, maxh=${style.maxHeight}, z=${style.zIndex}`);
+            results.push(`  childrenCount: ${childrenCount}`);
+          }
+
+          results.push("\n1. INSPECTING CATALOG GRID & PARENTS:");
+          let current = grid;
+          let depth = 0;
+          while (current && current !== document.documentElement) {
+            inspectNode(current, `Parent[${depth}]`);
+            current = current.parentElement;
+            depth++;
+          }
+
+          results.push("\n2. INSPECTING CAROUSEL:");
+          inspectNode(carousel, "Carousel");
+
+          // Render into alert to provide solid proof
+          alert(results.join("\n"));
+          
+          // Also set the diagnostic banner text
+          const banner = document.getElementById('temp-diagnostic-banner');
+          if (banner) {
+            banner.innerHTML = "DIAGNOSTICS COMPLETE - CHECK ALERTS. Grid H: " + grid.offsetHeight + "px";
+          }
+        } catch (e) {
+          alert("DIAGNOSTICS RUNTIME ERROR: " + e.message);
+        }
+      }, 500);
     }
 
     if (document.readyState === 'loading') {
@@ -1572,7 +1627,9 @@
 
     // DYNAMIC RE-INDEX AND DISPLAY FOR CAROUSEL LABELS AS CIRCLE IMAGES WITH BOTTOM TITLES
     function renderCarouselCategories() {
+      alert("renderCarouselCategories started");
       console.log("Categories:", CATEGORIES);
+      alert("Categories length = " + CATEGORIES.length);
       console.log("Categories Length:", CATEGORIES?.length);
       console.log("[DEBUG] Executing renderCarouselCategories. Categories config:", CONFIG.categories, "Total products:", CONFIG.products.length);
       
@@ -1638,6 +1695,9 @@
         `;
         container.appendChild(wrapper);
       });
+      const banner = document.getElementById('temp-diagnostic-banner');
+      if (banner) banner.innerText = "CATEGORIES RENDERED";
+      alert("Carousel rendered successfully");
     }
 
     function filterCategory(catName) {
@@ -1800,6 +1860,7 @@
 
     // MAIN PRODUCT RENDERS CATALOG SYSTEM WITH ADD-TO-CART INCREMENTORS
     function renderCatalogGrid() {
+      alert("renderCatalogGrid started");
       console.log("Products:", PRODUCTS);
       console.log("Products Length:", PRODUCTS?.length);
       console.log("[DEBUG] Executing renderCatalogGrid. Current Category:", currentCategory, "Lookup Keywords:", lookupKeywords, "Total products:", CONFIG.products.length);
@@ -1837,6 +1898,8 @@
 
       grid.style.display = 'flex';
       fallback.style.display = 'none';
+
+      alert("Products length = " + PRODUCTS.length);
 
       // IF IN ALL CATEGORY WITH NO ACTIVE FILTER: SHOW BEAUTIFUL HOMEPAGE SECTIONS MATCHING KIRANAMARKET STYLE
       if (currentCategory === "All" && lookupKeywords.length === 0) {
@@ -1903,6 +1966,9 @@
         singleWrapper.appendChild(subGrid);
         grid.appendChild(singleWrapper);
       }
+      const banner = document.getElementById('temp-diagnostic-banner');
+      if (banner) banner.innerText = "PRODUCTS RENDERED";
+      alert("Grid rendered successfully");
     }
 
     // HIGH-FIDELITY VECTOR SVG PRODUCT PACKSHOT GENERATORS
